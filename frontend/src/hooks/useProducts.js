@@ -44,42 +44,75 @@ const useProducts = (filters = {}) => {
                 }
             });
 
-            // Use production API URL
-            const apiUrl =
-                import.meta.env.VITE_API_URL || 'https://furniro-shop.onrender.com';
+            // ✅ PRODUCTION-FIRST API URL (Hardcoded for reliability)
+            const getApiUrl = () => {
+                // Check if we're in development (localhost)
+                if (typeof window !== 'undefined' &&
+                    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                    return import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                }
 
-            console.log('📡 API Request:', `${apiUrl}/api/products?${queryParams}`);
+                // ✅ PRODUCTION: Always use Render backend
+                return 'https://furniro-shop.onrender.com';
+            };
+
+            const apiUrl = getApiUrl();
+            console.log('🌍 Environment:', typeof window !== 'undefined' ? window.location.hostname : 'server');
+            console.log('📡 API URL:', apiUrl);
+            console.log('📡 Full API Request:', `${apiUrl}/api/products?${queryParams}`);
 
             const response = await fetch(`${apiUrl}/api/products?${queryParams}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                // ✅ Add timeout for production
+                signal: AbortSignal.timeout(10000) // 10 second timeout
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`HTTP ${response.status}: ${errorText || 'Network error'}`);
+                const errorText = await response.text().catch(() => '');
+                console.error('❌ Response not OK:', response.status, response.statusText);
+                throw new Error(`API Error ${response.status}: ${errorText || response.statusText || 'Network error'}`);
             }
 
             const data = await response.json();
 
             if (data.success) {
-                console.log('✅ Products fetched:', data.data.products.length);
+                console.log('✅ Products fetched successfully:', data.data.products.length);
+                console.log('📊 Pagination:', data.data.pagination);
                 setProducts(data.data.products);
                 setPagination(data.data.pagination);
             } else {
-                throw new Error(data.message || 'Failed to fetch products');
+                console.error('❌ API returned success: false', data);
+                throw new Error(data.message || 'API returned unsuccessful response');
             }
         } catch (err) {
-            console.error('❌ Fetch error:', err);
-            setError(err.message);
+            console.error('❌ Fetch error details:', {
+                message: err.message,
+                name: err.name,
+                stack: err.stack
+            });
+
+            // ✅ User-friendly error messages
+            let userMessage = 'Failed to load products. ';
+            if (err.name === 'TypeError' && err.message.includes('fetch')) {
+                userMessage += 'Please check your internet connection.';
+            } else if (err.message.includes('timeout')) {
+                userMessage += 'Request timed out. Please try again.';
+            } else if (err.message.includes('CORS')) {
+                userMessage += 'Connection error. Please refresh the page.';
+            } else {
+                userMessage += err.message;
+            }
+
+            setError(userMessage);
             setProducts([]);
             setPagination(null);
         } finally {
             setLoading(false);
         }
-    }, [stableFilters]); // ✅ Use stable filters
+    }, [stableFilters]);
 
     // ✅ useEffect with cleanup to prevent memory leaks
     useEffect(() => {
@@ -91,8 +124,8 @@ const useProducts = (filters = {}) => {
             }
         };
 
-        // ✅ Add delay to prevent rapid fire requests
-        const timeoutId = setTimeout(loadProducts, 100);
+        // ✅ Shorter delay for production
+        const timeoutId = setTimeout(loadProducts, 50);
 
         // Cleanup function
         return () => {
@@ -101,14 +134,16 @@ const useProducts = (filters = {}) => {
         };
     }, [fetchProducts]);
 
-    // ✅ Define refetch function with loading state
+    // ✅ Define refetch function
     const refetch = useCallback(() => {
         console.log('🔄 Manual refetch triggered');
         fetchProducts();
     }, [fetchProducts]);
 
-    // ✅ Debug log for renders
-    console.log('🔍 useProducts render - Loading:', loading, 'Products:', products.length);
+    // ✅ Debug log for renders (only in development)
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        console.log('🔍 useProducts render - Loading:', loading, 'Products:', products.length);
+    }
 
     return {
         products,
