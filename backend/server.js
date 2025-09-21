@@ -18,6 +18,8 @@ app.use(cors({
         'http://127.0.0.1:5173',
         'http://127.0.0.1:5174',
         'https://furniro-shop-n1ilseknj-jay-patidars-projects.vercel.app',
+        'https://furniro-shop-pvroldh1n-jay-patidars-projects.vercel.app',
+        'https://furniro-shop-kdxjplq60-jay-patidars-projects.vercel.app',
         'https://furniro-shop.onrender.com',
         'https://furniro-shop.onrender.com',
 
