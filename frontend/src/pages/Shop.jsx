@@ -21,6 +21,9 @@ const Shop = () => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
 
+  // ✅ Added loading state for operations
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const { products, loading, pagination, error, refetch } = useProducts({
     ...filters,
     page: currentPage,
@@ -44,49 +47,72 @@ const Shop = () => {
     setShowModal(true);
   };
 
+  // ✅ Enhanced delete with better UX
   const handleDeleteProduct = async (productId) => {
     if (window.confirm("Are you sure you want to delete this product?")) {
+      setIsDeleting(true);
       try {
-        const response = await fetch(
-          `http://localhost:5000/api/products/${productId}`,
-          {
-            method: "DELETE",
-          }
-        );
+        const apiUrl =
+          import.meta.env.VITE_API_URL || "https://furniro-shop.onrender.com";
+        const response = await fetch(`${apiUrl}/api/products/${productId}`, {
+          method: "DELETE",
+        });
 
         if (response.ok) {
+          // ✅ Show success message
+          alert("Product deleted successfully!");
           refetch();
         } else {
-          alert("Failed to delete product");
+          const errorData = await response.json().catch(() => ({}));
+          alert(
+            `Failed to delete product: ${errorData.message || "Unknown error"}`
+          );
         }
       } catch (error) {
         console.error("Delete error:", error);
-        alert("Error deleting product");
+        alert(`Error deleting product: ${error.message}`);
+      } finally {
+        setIsDeleting(false);
       }
     }
   };
 
+  // ✅ Enhanced modal submit with better error handling
   const handleModalSubmit = async (formData) => {
-    const url =
-      modalType === "edit"
-        ? `http://localhost:5000/api/products/${selectedProduct.id}`
-        : "http://localhost:5000/api/products";
+    try {
+      const apiUrl =
+        import.meta.env.VITE_API_URL || "https://furniro-shop.onrender.com";
+      const url =
+        modalType === "edit"
+          ? `${apiUrl}/api/products/${selectedProduct.id}`
+          : `${apiUrl}/api/products`;
 
-    const method = modalType === "edit" ? "PUT" : "POST";
+      const method = modalType === "edit" ? "PUT" : "POST";
 
-    const response = await fetch(url, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(formData),
-    });
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
 
-    if (!response.ok) {
-      throw new Error("Failed to save product");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to ${modalType} product`);
+      }
+
+      // ✅ Show success message
+      alert(
+        `Product ${modalType === "edit" ? "updated" : "added"} successfully!`
+      );
+      refetch();
+    } catch (error) {
+      console.error("Submit error:", error);
+      // ✅ Better error handling - don't close modal on error
+      alert(`Error: ${error.message}`);
+      throw error; // Re-throw so modal handles it
     }
-
-    refetch();
   };
 
   const handleModalClose = () => {
@@ -141,12 +167,16 @@ const Shop = () => {
                 <span className="hidden xs:inline">Filter</span>
               </button>
 
+              {/* ✅ Enhanced refresh button with loading state */}
               <button
                 onClick={refetch}
-                className="flex items-center gap-1 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 text-sm"
+                disabled={loading}
+                className="flex items-center gap-1 sm:gap-2 px-3 py-2 sm:px-4 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg
-                  className="w-4 h-4 sm:w-5 sm:h-5"
+                  className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                    loading ? "animate-spin" : ""
+                  }`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -158,7 +188,9 @@ const Shop = () => {
                     d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                   />
                 </svg>
-                <span className="hidden sm:inline">Refresh</span>
+                <span className="hidden sm:inline">
+                  {loading ? "Loading..." : "Refresh"}
+                </span>
               </button>
 
               <span className="text-xs sm:text-sm text-gray-600 hidden md:block">
@@ -215,7 +247,7 @@ const Shop = () => {
             </span>
           </div>
 
-          {/* Filter Panel - Responsive */}
+          {/* Filter Panel - Same as before */}
           {showFilters && (
             <div className="border-t pt-4 sm:pt-6 animate-fadeIn">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -314,7 +346,7 @@ const Shop = () => {
           )}
         </div>
 
-        {/* Error State - Responsive */}
+        {/* Error State - Enhanced */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4 mb-6 sm:mb-8">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
@@ -332,19 +364,25 @@ const Shop = () => {
                     d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                   />
                 </svg>
-                <p className="text-red-700 text-sm">{error}</p>
+                <div>
+                  <p className="text-red-700 text-sm font-medium">
+                    Failed to load products
+                  </p>
+                  <p className="text-red-600 text-xs">{error}</p>
+                </div>
               </div>
               <button
                 onClick={refetch}
-                className="px-3 py-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors duration-200 text-sm"
+                disabled={loading}
+                className="px-3 py-1.5 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors duration-200 text-sm disabled:opacity-50"
               >
-                Retry
+                {loading ? "Retrying..." : "Retry"}
               </button>
             </div>
           </div>
         )}
 
-        {/* Products Grid - Responsive */}
+        {/* Products Grid - Same as before but with loading state on delete */}
         {loading ? (
           <div className="text-center py-8 sm:py-12">
             <div className="inline-block animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-yellow-600 mb-3 sm:mb-4"></div>
@@ -354,6 +392,18 @@ const Shop = () => {
           </div>
         ) : (
           <>
+            {/* ✅ Show deleting overlay when deleting */}
+            {isDeleting && (
+              <div className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-40">
+                <div className="bg-white rounded-lg p-4 shadow-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                    <span className="text-sm">Deleting product...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
               {products.map((product) => (
                 <ProductCard
@@ -392,7 +442,7 @@ const Shop = () => {
               </div>
             )}
 
-            {/* Pagination - Already responsive */}
+            {/* Pagination - Same as before */}
             {pagination && pagination.totalPages > 1 && (
               <Pagination
                 currentPage={currentPage}
@@ -406,7 +456,7 @@ const Shop = () => {
         )}
       </div>
 
-      {/* Product Modal - Already responsive */}
+      {/* Product Modal - Same as before */}
       {showModal && (
         <ProductModal
           type={modalType}
@@ -416,7 +466,7 @@ const Shop = () => {
         />
       )}
 
-      {/* Footer - Already responsive */}
+      {/* Footer - Same as before */}
       <Footer />
     </div>
   );

@@ -9,19 +9,23 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// ✅ FIXED CORS Configuration
 app.use(cors({
     origin: [
         'http://localhost:5173',
+        'http://localhost:5174', // ✅ YOUR Vite dev server
         'http://localhost:3000',
         'http://127.0.0.1:5173',
-        'http://localhost:5173',
+        'http://127.0.0.1:5174',
+        'https://furniro-shop.onrender.com',
         process.env.FRONTEND_URL
     ].filter(Boolean),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// ✅ REMOVED problematic app.options('*', cors()) - this was causing crash
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -42,6 +46,7 @@ app.get('/', (req, res) => {
         status: 'success',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
+        cors: 'Fixed for localhost:5174',
         endpoints: {
             products: '/api/products',
             productById: '/api/products/:id',
@@ -55,6 +60,7 @@ app.get('/api', (req, res) => {
     res.json({
         message: 'Furniture Store API',
         version: '1.0.0',
+        cors: 'localhost:5174 allowed',
         endpoints: {
             'GET /api/products': 'Get all products (with filtering, sorting, pagination)',
             'POST /api/products': 'Create a new product',
@@ -80,8 +86,8 @@ app.use((err, req, res, next) => {
     });
 });
 
-// 404 handler
-app.use('/{*any}', (req, res) => {
+// ✅ FIXED 404 handler - removed problematic wildcard
+app.use((req, res) => {
     res.status(404).json({
         success: false,
         message: `Route ${req.originalUrl} not found`,
@@ -97,7 +103,7 @@ app.use('/{*any}', (req, res) => {
         ]
     });
 });
-// Start server
+
 // Start server and save the instance
 const server = app.listen(PORT, () => {
     console.log('🎯 ================================');
@@ -105,6 +111,7 @@ const server = app.listen(PORT, () => {
     console.log(`📍 API URL: http://localhost:${PORT}`);
     console.log(`📊 Products API: http://localhost:${PORT}/api/products`);
     console.log(`📈 API Info: http://localhost:${PORT}/api`);
+    console.log(`🔧 CORS: Fixed for localhost:5174`);
     console.log('🎯 ================================');
 });
 

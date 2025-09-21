@@ -6,58 +6,109 @@ const useProducts = (filters = {}) => {
     const [error, setError] = useState(null);
     const [pagination, setPagination] = useState(null);
 
-    // Stringify filters to prevent reference issues
-    const filtersString = useMemo(() => {
-        return JSON.stringify(filters);
-    }, [filters]);
+    // ✅ Memoize filters to prevent infinite re-renders
+    const stableFilters = useMemo(() => {
+        return {
+            category: filters.category || '',
+            brand: filters.brand || '',
+            minPrice: filters.minPrice || '',
+            maxPrice: filters.maxPrice || '',
+            sortBy: filters.sortBy || 'createdAt',
+            sortOrder: filters.sortOrder || 'desc',
+            page: filters.page || 1,
+            limit: filters.limit || 8
+        };
+    }, [
+        filters.category,
+        filters.brand,
+        filters.minPrice,
+        filters.maxPrice,
+        filters.sortBy,
+        filters.sortOrder,
+        filters.page,
+        filters.limit
+    ]);
 
     const fetchProducts = useCallback(async() => {
+        console.log('🔄 Fetching products with filters:', stableFilters);
+
         try {
             setLoading(true);
             setError(null);
 
             const queryParams = new URLSearchParams();
-            const parsedFilters = JSON.parse(filtersString);
 
-            Object.entries(parsedFilters).forEach(([key, value]) => {
+            Object.entries(stableFilters).forEach(([key, value]) => {
                 if (value !== '' && value !== null && value !== undefined) {
                     queryParams.append(key, value);
                 }
             });
 
-            const response = await fetch(
-                `http://localhost:5000/api/products?${queryParams}`
-            );
+            // Use production API URL
+            const apiUrl =
+                import.meta.env.VITE_API_URL || 'https://furniro-shop.onrender.com';
+
+            console.log('📡 API Request:', `${apiUrl}/api/products?${queryParams}`);
+
+            const response = await fetch(`${apiUrl}/api/products?${queryParams}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText || 'Network error'}`);
             }
 
             const data = await response.json();
 
             if (data.success) {
+                console.log('✅ Products fetched:', data.data.products.length);
                 setProducts(data.data.products);
                 setPagination(data.data.pagination);
             } else {
                 throw new Error(data.message || 'Failed to fetch products');
             }
         } catch (err) {
-            console.error('Fetch error:', err);
+            console.error('❌ Fetch error:', err);
             setError(err.message);
             setProducts([]);
             setPagination(null);
         } finally {
             setLoading(false);
         }
-    }, [filtersString]); // Use string instead of object
+    }, [stableFilters]); // ✅ Use stable filters
 
+    // ✅ useEffect with cleanup to prevent memory leaks
     useEffect(() => {
+        let isMounted = true;
+
+        const loadProducts = async() => {
+            if (isMounted) {
+                await fetchProducts();
+            }
+        };
+
+        // ✅ Add delay to prevent rapid fire requests
+        const timeoutId = setTimeout(loadProducts, 100);
+
+        // Cleanup function
+        return () => {
+            isMounted = false;
+            clearTimeout(timeoutId);
+        };
+    }, [fetchProducts]);
+
+    // ✅ Define refetch function with loading state
+    const refetch = useCallback(() => {
+        console.log('🔄 Manual refetch triggered');
         fetchProducts();
     }, [fetchProducts]);
 
-    const refetch = useCallback(() => {
-        fetchProducts();
-    }, [fetchProducts]);
+    // ✅ Debug log for renders
+    console.log('🔍 useProducts render - Loading:', loading, 'Products:', products.length);
 
     return {
         products,
